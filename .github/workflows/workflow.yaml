@@ -1,0 +1,44 @@
+name: Hello World Reusable workflow
+
+on:
+  workflow_call:
+    inputs:
+      action-name:
+        description: "The name of the action to run"
+        required: true
+        type: string
+permissions:
+  id-token: write
+jobs:
+  CI:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Action Repository
+        uses: actions/checkout@v5
+        with:
+          repository: zorza-org/${{ inputs.action-name }}
+          ref: main
+          path: .github/actions/hello
+          token: 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
+
+      - name: Run action ${{ inputs.action-name }}
+        uses: ./.github/actions/hello
+
+      - name: Request and print JWT claims
+        shell: bash
+        run: |
+          response="$(curl --fail --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            --get \
+            --data-urlencode "audience=debug" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL")"
+
+          jwt="$(jq -r '.value' <<< "$response")"
+          payload="$(cut -d. -f2 <<< "$jwt" | tr '_-' '/+')"
+
+          case $((${#payload} % 4)) in
+            2) payload+="==" ;;
+            3) payload+="=" ;;
+          esac
+
+          printf '%s' "$payload" | base64 --decode | jq .
